@@ -1,0 +1,145 @@
+-- [[ ADVANCED FAST SLAP & COMPLETE UTILITY HUB ]] --
+-- Optimized for seamless injection via Delta Mobile or PC
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- Global Feature Toggles
+getgenv().FastSlap = true
+getgenv().SlapAura = true
+getgenv().AntiRagdoll = true
+getgenv().AntiVoid = true
+
+getgenv().SlapDelay = 0.05 -- Delay between automated attacks (0 = Maximum speed)
+getgenv().AuraRange = 20    -- Distance threshold to target players
+
+-- Helper function to locate weapon/glove assets
+local function getGlove()
+    local char = LocalPlayer.Character
+    if char then
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool then return tool end
+    end
+    return LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
+end
+
+-- ==========================================
+-- FEATURE 1: NO COOLDOWN BYPASS SYSTEMS
+-- ==========================================
+
+-- Method A: Global Module Interception (Metatable Hook)
+task.spawn(function()
+    local success, cooldownMod = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("CooldownModule", true))
+    end)
+    if success and cooldownMod and cooldownMod.Cooldown then
+        local oldCooldown = cooldownMod.Cooldown
+        cooldownMod.Cooldown = function(...)
+            return oldCooldown(0) -- Rewrites module response to force 0 wait time
+        end
+        print("[Delta] Successfully hooked the server Cooldown Module.")
+    end
+end)
+
+-- Method B: Client Script Engine Cycle (Runs continuously)
+task.spawn(function()
+    while true do
+        task.wait(getgenv().SlapDelay)
+        if getgenv().FastSlap then
+            local glove = getGlove()
+            if glove then
+                -- Clones and clears the tool's internal countdown thread to force immediate reuse
+                local localScript = glove:FindFirstChildOfClass("LocalScript")
+                if localScript then
+                    local clone = localScript:Clone()
+                    localScript:Destroy()
+                    clone.Parent = glove
+                end
+                glove:Activate()
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- FEATURE 2: AUTOMATIC KILL AURA
+-- ==========================================
+task.spawn(function()
+    while true do
+        RunService.RenderStepped:Wait()
+        if getgenv().SlapAura then
+            local myChar = LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot then
+                for _, target in ipairs(Players:GetPlayers()) do
+                    if target ~= LocalPlayer and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                        local enemyRoot = target.Character.HumanoidRootPart
+                        local enemyHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
+                        
+                        -- Target verification
+                        if enemyHumanoid and enemyHumanoid.Health > 0 then
+                            local distance = (myRoot.Position - enemyRoot.Position).Magnitude
+                            if distance <= getgenv().AuraRange then
+                                local glove = getGlove()
+                                if glove then
+                                    glove:Activate()
+                                    -- Directly triggers standard game network replication vectors
+                                    local remote = ReplicatedStorage:FindFirstChild("b") or ReplicatedStorage:FindFirstChild("Slap")
+                                    if remote and remote:IsA("RemoteEvent") then
+                                        remote:FireServer(target.Character)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- FEATURE 3: ANTI-RAGDOLL & STUN BYPASS
+-- ==========================================
+task.spawn(function()
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        char:WaitForChild("Humanoid")
+        if getgenv().AntiRagdoll then
+            -- Disables internal state changes responsible for locking your character downward
+            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        end
+    end)
+    -- Run fallback loop for mid-life state updates
+    while task.wait(1) do
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChildOfClass("Humanoid") and getgenv().AntiRagdoll then
+            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        end
+    end
+end)
+
+-- ==========================================
+-- FEATURE 4: ANTI-VOID (FALL PROTECTION)
+-- ==========================================
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if getgenv().AntiVoid then
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            -- Detects if your physical coordinate falls below map boundaries
+            if root and root.Position.Y < -20 then
+                root.Velocity = Vector3.new(0, 0, 0)
+                root.CFrame = CFrame.new(0, 20, 0) -- Teleports you safely back up to the island center
+                print("[Delta] Anti-Void active: Caught fall vector.")
+            end
+        end
+    end
+end)
+
+print("[Delta] Multi-Feature Slap Hub completely armed.")
